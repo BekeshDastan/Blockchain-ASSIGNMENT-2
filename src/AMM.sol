@@ -1,24 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./LPToken.sol";
 
-contract AMM {
+contract AMM is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     IERC20 public immutable token0;
     IERC20 public immutable token1;
     LPToken public immutable lpToken;
 
     uint256 public reserve0;
     uint256 public reserve1;
-
-    bool private _locked;
-
-    modifier nonReentrant() {
-        require(!_locked, "ReentrancyGuard: reentrant call");
-        _locked = true;
-        _;
-        _locked = false;
-    }
 
     event LiquidityAdded(address indexed provider, uint256 amount0, uint256 amount1, uint256 lpMinted);
     event LiquidityRemoved(address indexed provider, uint256 amount0, uint256 amount1, uint256 lpBurned);
@@ -44,13 +40,14 @@ contract AMM {
 
         require(shares > 0, "Insufficient liquidity minted");
 
-        token0.transferFrom(msg.sender, address(this), amount0Desired);
-        token1.transferFrom(msg.sender, address(this), amount1Desired);
+        token0.safeTransferFrom(msg.sender, address(this), amount0Desired);
+        token1.safeTransferFrom(msg.sender, address(this), amount1Desired);
 
-        _updateReserves();
-        
+        reserve0 += amount0Desired;
+        reserve1 += amount1Desired;
+
         lpToken.mint(msg.sender, shares);
-        
+
         emit LiquidityAdded(msg.sender, amount0Desired, amount1Desired, shares);
     }
 
@@ -61,13 +58,13 @@ contract AMM {
         amount0 = (shares * reserve0) / _totalSupply;
         amount1 = (shares * reserve1) / _totalSupply;
 
-        lpToken.burn(msg.sender, shares);
-
         reserve0 -= amount0;
         reserve1 -= amount1;
 
-        token0.transfer(msg.sender, amount0);
-        token1.transfer(msg.sender, amount1);
+        lpToken.burn(msg.sender, shares);
+
+        token0.safeTransfer(msg.sender, amount0);
+        token1.safeTransfer(msg.sender, amount1);
         
         emit LiquidityRemoved(msg.sender, amount0, amount1, shares);
     }
@@ -84,11 +81,17 @@ contract AMM {
         amountOut = getAmountOut(amountIn, resIn, resOut);
         require(amountOut >= minAmountOut, "Slippage: Output too low");
 
-        tIn.transferFrom(msg.sender, address(this), amountIn);
-        
-        tOut.transfer(msg.sender, amountOut);
-        
-        _updateReserves(); 
+        tIn.safeTransferFrom(msg.sender, address(this), amountIn);
+
+        if (isToken0) {
+            reserve0 += amountIn;
+            reserve1 -= amountOut;
+        } else {
+            reserve1 += amountIn;
+            reserve0 -= amountOut;
+        }
+
+        tOut.safeTransfer(msg.sender, amountOut);
 
         emit Swap(msg.sender, tokenIn, amountIn, amountOut);
     }

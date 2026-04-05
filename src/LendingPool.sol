@@ -2,9 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LendingPool is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     IERC20 public immutable token;
     
     uint256 public constant LTV = 75; 
@@ -43,8 +46,8 @@ contract LendingPool is ReentrancyGuard {
 
     function deposit(uint256 amount) external nonReentrant {
         _updateInterest();
-        token.transferFrom(msg.sender, address(this), amount);
         positions[msg.sender].deposited += amount;
+        token.safeTransferFrom(msg.sender, address(this), amount);
         emit Deposited(msg.sender, amount);
     }
 
@@ -57,7 +60,7 @@ contract LendingPool is ReentrancyGuard {
         
         positions[msg.sender].borrowedBase += (amount * 1e18) / borrowIndex;
         totalBorrows += amount;
-        token.transfer(msg.sender, amount);
+        token.safeTransfer(msg.sender, amount);
         emit Borrowed(msg.sender, amount);
     }
 
@@ -66,9 +69,9 @@ contract LendingPool is ReentrancyGuard {
         uint256 currentDebt = (positions[msg.sender].borrowedBase * borrowIndex) / 1e18;
         uint256 repayAmount = amount > currentDebt ? currentDebt : amount;
 
-        token.transferFrom(msg.sender, address(this), repayAmount);
         positions[msg.sender].borrowedBase -= (repayAmount * 1e18) / borrowIndex;
         totalBorrows -= repayAmount;
+        token.safeTransferFrom(msg.sender, address(this), repayAmount);
         emit Repaid(msg.sender, repayAmount);
     }
 
@@ -79,7 +82,7 @@ contract LendingPool is ReentrancyGuard {
         positions[msg.sender].deposited -= amount;
         require(getHealthFactor(msg.sender) >= 1e18, "Unsafe health factor");
         
-        token.transfer(msg.sender, amount);
+        token.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
     }
 
@@ -92,8 +95,6 @@ contract LendingPool is ReentrancyGuard {
 
         uint256 amountToRepay = debt;
         
-        token.transferFrom(msg.sender, address(this), amountToRepay);
-        
         positions[user].borrowedBase = 0;
         positions[user].deposited = 0;
         
@@ -103,13 +104,16 @@ contract LendingPool is ReentrancyGuard {
             totalBorrows -= amountToRepay;
         }
         
-        token.transfer(msg.sender, collateral);
+        token.safeTransferFrom(msg.sender, address(this), amountToRepay);
+        token.safeTransfer(msg.sender, collateral);
         emit Liquidated(user, amountToRepay, collateral);
 }
 
     function getHealthFactor(address user) public view returns (uint256) {
         uint256 debt = (positions[user].borrowedBase * borrowIndex) / 1e18;
-        if (debt == 0) return 100e18; 
-        return (positions[user].deposited * LIQUIDATION_THRESHOLD * 1e18) / (debt * 100);
+        if (debt > 0) {
+            return (positions[user].deposited * LIQUIDATION_THRESHOLD * 1e18) / (debt * 100);
+        }
+        return type(uint256).max;
     }
 }
