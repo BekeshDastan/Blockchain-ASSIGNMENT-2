@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LendingPool is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
-    
     uint256 public constant LTV = 75; 
     uint256 public constant LIQUIDATION_THRESHOLD = 80; 
     uint256 public constant BASE_RATE = 2; 
@@ -110,10 +110,13 @@ contract LendingPool is ReentrancyGuard {
 }
 
     function getHealthFactor(address user) public view returns (uint256) {
-        uint256 debt = (positions[user].borrowedBase * borrowIndex) / 1e18;
-        if (debt > 0) {
-            return (positions[user].deposited * LIQUIDATION_THRESHOLD * 1e18) / (debt * 100);
+        uint256 rawDebt = positions[user].borrowedBase * borrowIndex;
+        if (rawDebt == 0) {
+            return type(uint256).max;
         }
-        return type(uint256).max;
+
+        uint256 numerator = positions[user].deposited * LIQUIDATION_THRESHOLD * 1e18;
+        uint256 healthScaled = Math.mulDiv(numerator, 1e18, rawDebt);
+        return healthScaled / 100;
     }
 }
