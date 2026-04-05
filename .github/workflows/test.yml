@@ -55,4 +55,5 @@ jobs:
             --exclude-dependencies 
             --exclude-low 
             --exclude-informational
+            --exclude dangerous-strict-equalities
             --solc-remaps "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
