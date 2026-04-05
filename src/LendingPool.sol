@@ -111,6 +111,7 @@ contract LendingPool is ReentrancyGuard {
 
     function getHealthFactor(address user) public view returns (uint256) {
         uint256 rawDebt = positions[user].borrowedBase * borrowIndex;
+        // slither-disable-next-line dangerous-strict-equalities
         if (rawDebt == 0) {
             return type(uint256).max;
         }
