@@ -51,4 +51,8 @@ jobs:
         uses: crytic/slither-action@v0.4.0
         with:
           target: '.'
-          slither-args: --solc-remaps "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/" --exclude-low --exclude-informational
+         slither-args: >
+            --exclude-dependencies 
+            --exclude-low 
+            --exclude-informational
+            --solc-remaps "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
