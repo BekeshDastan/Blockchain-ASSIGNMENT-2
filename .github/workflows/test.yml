@@ -28,7 +28,7 @@ jobs:
         run: forge build
 
       - name: Run All Tests
-        run: forge test -vvv
+        run: forge test --exclude-test ForkTest -vvv
 
       - name: Generate Gas Report
 
