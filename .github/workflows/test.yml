@@ -51,7 +51,7 @@ jobs:
         uses: crytic/slither-action@v0.4.0
         with:
           target: '.'
-         slither-args: >
+          slither-args: >
             --exclude-dependencies 
             --exclude-low 
             --exclude-informational
